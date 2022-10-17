@@ -1,0 +1,10 @@
+{
+    "DATAROOT": "/home/featurize/data",
+    "TRAINID": 6,
+    "LOADTRAIN": true,
+    "LOADTEST": true,
+    "BATCHSIZE": 32,
+    "LR": 0.003,
+    "EPOCHS": 100,
+    "MOMENTUM": 0.9
+}

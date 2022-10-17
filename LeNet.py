@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,16 +6,17 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchsummary
+import json
 
 class Dataset:
     def __init__(self, config):
         transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         self.classes = ('plane', 'car', 'bird', 'cat','deer', 'dog', 'frog', 'horse', 'ship', 'truck')
         if config["LOADTRAIN"]:
-            self.trainset = torchvision.datasets.CIFAR10(root='./data', train=True,download=False, transform=transform)
+            self.trainset = torchvision.datasets.CIFAR10(root=config["DATAROOT"], train=True,download=False, transform=transform)
             self.trainloader = torch.utils.data.DataLoader(self.trainset, batch_size=config["BATCHSIZE"],shuffle=True, num_workers=2)
         if config["LOADTEST"]:
-            self.testset = torchvision.datasets.CIFAR10(root='./data', train=False,download=False, transform=transform)
+            self.testset = torchvision.datasets.CIFAR10(root=config["DATAROOT"], train=False,download=False, transform=transform)
             self.testloader = torch.utils.data.DataLoader(self.testset, batch_size=config["BATCHSIZE"],shuffle=False, num_workers=2)
 
 class CNN(nn.Module):
@@ -47,8 +47,9 @@ class CNN(nn.Module):
     def train(self, config):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(self.parameters(), lr=config["LR"], momentum=config["MOMENTUM"])
-        loss_data = []
-        for epoch in range(config["EPOCHS"]):  # loop over the dataset multiple times
+        num_batch = len(self.dataset.trainloader)
+        epoch_loss = []
+        for epoch in range(config["EPOCHS"]): 
             running_loss = 0.0
             for i, data in enumerate(self.dataset.trainloader, 0):
                 inputs, labels = data[0].to(self.device), data[1].to(self.device)
@@ -57,45 +58,141 @@ class CNN(nn.Module):
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
-
                 running_loss += loss.item()
-                if i % 50 == 0 and i > 0:    # the printed loss is the average loss over recent 1000 mini-batches
-                    print("current epoch: %2d, current batches: %5d, loss: %.3f"%(epoch+1,i,running_loss/50))
-                    loss_data.append([epoch+1,i,running_loss/50])
-                    running_loss = 0.0
 
+            print("current epoch: %2d, mean loss: %.3f"%(epoch+1,running_loss/num_batch))
+            epoch_loss.append(running_loss/num_batch)
 
         print('------------Finished Training------------')
         torch.save(self.state_dict(), "./model/LeNet_model_%d.pth"%config["TRAINID"])
-        np.savez('./result/LeNet_model_%d.npz'%config["TRAINID"], data=np.array(loss_data))
+        with open("./model/LeNet_config_%d.json"%config["TRAINID"],"w") as outfile:
+            json.dump(config, outfile, indent = 4)
+        np.savez('./result/LeNet_model_%d.npz'%config["TRAINID"], data=np.array(epoch_loss))
+
+    def test(self, config):
+        self.load_state_dict(torch.load("./model/LeNet_model_%d.pth"%config["TRAINID"]))
+        correct = total = 0
+        with torch.no_grad():
+            for data in self.dataset.testloader:
+                images, labels = data[0].to(self.device), data[1].to(self.device)
+                outputs = self.forward(images)
+                # the class with the highest output is what we choose as prediction
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        print("Accuracy of the network on the 10000 test images:",'{:.2%}'.format(correct/total))
+        return correct/total
 
 
 if __name__=="__main__":
-    
-    for i in range(1,11):
-        
-        config = \
-        {
-            "TRAINID":i,
-            "LOADTRAIN":True,
-            "LOADTEST":False,
-            "BATCHSIZE":256,
-            "LR":0.003,
-            "EPOCHS":100,
-            "MOMENTUM":0.9
-        }
 
-        dataset = Dataset(config)
-        net = CNN(dataset)
-        net.summarize(config)
-        net.train(config)
+    L=[]
+
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":1,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":256,
+        "LR":0.003,
+        "EPOCHS":100,
+        "MOMENTUM":0.9
+    }
+
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
+
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":2,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":128,
+        "LR":0.001,
+        "EPOCHS":100,
+        "MOMENTUM":0.9
+    }
+
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
+
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":3,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":512,
+        "LR":0.005,
+        "EPOCHS":100,
+        "MOMENTUM":0.8
+    }
+
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
+
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":4,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":256,
+        "LR":0.001,
+        "EPOCHS":100,
+        "MOMENTUM":0.8
+    }
+
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
+
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":5,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":64,
+        "LR":0.001,
+        "EPOCHS":100,
+        "MOMENTUM":0.9
+    }
+
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
 
 
+    config = \
+    {
+        "DATAROOT":"/home/featurize/data", 
+        "TRAINID":6,
+        "LOADTRAIN":True,
+        "LOADTEST":True,
+        "BATCHSIZE":32,
+        "LR":0.003,
+        "EPOCHS":100,
+        "MOMENTUM":0.9
+    }
 
+    dataset = Dataset(config)
+    net = CNN(dataset)
+    # net.summarize(config)
+    L.append(net.test(config))
 
-
-
-
+    np.savez('./result/LeNet_test_res.npz', data=np.array(L))
 
 
 
