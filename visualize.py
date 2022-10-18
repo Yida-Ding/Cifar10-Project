@@ -20,10 +20,10 @@ def vis_main():
     visualize("LeNet", axes[0])
     visualize("DingNet", axes[1])
     plt.tight_layout()
-    plt.savefig("./result/loss_vis.png")
+    plt.savefig("./result/loss_vis_bnlc.png")
 
 def analyze_test(netname):
-    data = np.load('./result/%s_test_res.npz'%netname)
+    data = np.load('./result/%s_test_res_bnlc.npz'%netname)
     test = data["data"]
     test = ['{:.2%}'.format(n) for n in test]
     print(test)

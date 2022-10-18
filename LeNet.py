@@ -8,6 +8,9 @@ import torchvision.transforms as transforms
 import torchsummary
 import json
 
+
+from BatchNorm import BatchNorm
+
 class Dataset:
     def __init__(self, config):
         transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -23,21 +26,26 @@ class CNN(nn.Module):
     def __init__(self, dataset):
         super().__init__()
         self.dataset = dataset
-        self.conv1 = nn.Conv2d(3, 6, 5) # input 4x3x32x32 (batch=4, 3 ch), with 6 kernels (3 ch), kernel size 5x5, output 4x6x28x28(6 ch, batch=4, 32-5+1=28)
-        self.pool = nn.MaxPool2d(2, 2) # output 4x6x14x14
-        self.conv2 = nn.Conv2d(6, 16, 5) # output 4x16x10x10
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2) 
+        self.conv2 = nn.Conv2d(6, 16, 5) 
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
+        self.bn1 = BatchNorm(120, num_dims=2)
+        self.bn2 = BatchNorm(84, num_dims=2)
+        self.bnc1 = nn.BatchNorm2d(6)
+        self.bnc2 = nn.BatchNorm2d(16)
+
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x))) # 4x6x14x14
-        x = self.pool(F.relu(self.conv2(x))) # 4x16x5x5
+        x = self.pool(F.relu(self.bnc1(self.conv1(x)))) # 4x6x14x14
+        x = self.pool(F.relu(self.bnc2(self.conv2(x)))) # 4x16x5x5
         x = torch.flatten(x, 1) # 4x400 flatten all dimensions except batch 
-        x = F.relu(self.fc1(x)) # 4x120
-        x = F.relu(self.fc2(x)) # 4x84
+        x = F.relu(self.bn1(self.fc1(x))) # 4x120
+        x = F.relu(self.bn2(self.fc2(x))) # 4x84
         x = self.fc3(x) # 4x10
         return x
 
@@ -69,7 +77,7 @@ class CNN(nn.Module):
             json.dump(config, outfile, indent = 4)
         np.savez('./result/LeNet_model_%d.npz'%config["TRAINID"], data=np.array(epoch_loss))
 
-    def test(self, config):
+    def test(self):
         self.load_state_dict(torch.load("./model/LeNet_model_%d.pth"%config["TRAINID"]))
         correct = total = 0
         with torch.no_grad():
@@ -87,114 +95,18 @@ class CNN(nn.Module):
 
 if __name__=="__main__":
 
-    L=[]
+    test_res = []
 
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":1,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":256,
-        "LR":0.003,
-        "EPOCHS":100,
-        "MOMENTUM":0.9
-    }
+    for i in range(1,7):
 
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":2,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":128,
-        "LR":0.001,
-        "EPOCHS":100,
-        "MOMENTUM":0.9
-    }
-
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":3,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":512,
-        "LR":0.005,
-        "EPOCHS":100,
-        "MOMENTUM":0.8
-    }
-
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":4,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":256,
-        "LR":0.001,
-        "EPOCHS":100,
-        "MOMENTUM":0.8
-    }
-
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":5,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":64,
-        "LR":0.001,
-        "EPOCHS":100,
-        "MOMENTUM":0.9
-    }
-
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-
-    config = \
-    {
-        "DATAROOT":"/home/featurize/data", 
-        "TRAINID":6,
-        "LOADTRAIN":True,
-        "LOADTEST":True,
-        "BATCHSIZE":32,
-        "LR":0.003,
-        "EPOCHS":100,
-        "MOMENTUM":0.9
-    }
-
-    dataset = Dataset(config)
-    net = CNN(dataset)
-    # net.summarize(config)
-    L.append(net.test(config))
-
-    np.savez('./result/LeNet_test_res.npz', data=np.array(L))
-
-
-
+        with open("./model/LeNet_config_%d.json"%i,'r') as outfile:
+            config = json.load(outfile)
+            dataset = Dataset(config)
+            net = CNN(dataset)
+            net.summarize(config)
+            net.train(config)
+            test_res.append(net.test())
+    
+    np.savez('./result/LeNet_test_res_bnlc.npz', data=np.array(test_res))
 
 
